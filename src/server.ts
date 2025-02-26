@@ -13,14 +13,17 @@ import {
   streamText,
   type StreamTextOnFinishCallback,
 } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
+import { createOpenAI, openai } from "@ai-sdk/openai";
 import { processToolCalls } from "./utils";
 import { tools, executions } from "./tools";
 import { AsyncLocalStorage } from "node:async_hooks";
+import { createDeepSeek } from "@ai-sdk/deepseek";
 
 // Environment variables type definition
 export type Env = {
   OPENAI_API_KEY: string;
+  DEEPSEEK_API_KEY: string;
+  AI_GATEWAY_TOKEN: string;
   Chat: AgentNamespace<Chat>;
 };
 
@@ -39,9 +42,10 @@ export class Chat extends AIChatAgent<Env> {
     return agentContext.run(this, async () => {
       const dataStreamResponse = createDataStreamResponse({
         execute: async (dataStream) => {
+          console.log("streaming response");
           // Process any pending tool calls from previous messages
           // This handles human-in-the-loop confirmations for tools
-          const processedMessages = await processToolCalls({
+          let processedMessages = await processToolCalls({
             messages: this.messages,
             dataStream,
             tools,
@@ -51,17 +55,18 @@ export class Chat extends AIChatAgent<Env> {
           // Initialize OpenAI client with API key from environment
           const openai = createOpenAI({
             apiKey: this.env.OPENAI_API_KEY,
+            baseURL: "https://gateway.ai.cloudflare.com/v1/f7d1b2da33b7651c618148d0e05d024d/openai-gateway/openai",
+            headers: {
+              "cf-aig-authorization": `Bearer ${this.env.AI_GATEWAY_TOKEN}`,
+            },
           });
-
-          // Cloudflare AI Gateway
-          // const openai = createOpenAI({
-          //   apiKey: this.env.OPENAI_API_KEY,
-          //   baseURL: this.env.GATEWAY_BASE_URL,
+          // const deepseek = createDeepSeek({
+          //   apiKey: this.env.DEEPSEEK_API_KEY ?? '',
           // });
-
+          
           // Stream the AI response using GPT-4
           const result = streamText({
-            model: openai("gpt-4o-2024-11-20"),
+            model: openai("gpt-4o-mini"),
             system: `
               You are a helpful assistant that can do various tasks. If the user asks, then you can also schedule tasks to be executed later. The input may have a date/time/cron pattern to be input as an object into a scheduler The time is now: ${new Date().toISOString()}.
               `,
@@ -96,11 +101,11 @@ export class Chat extends AIChatAgent<Env> {
  */
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
-    if (!env.OPENAI_API_KEY) {
+    if (!env.DEEPSEEK_API_KEY) {
       console.error(
-        "OPENAI_API_KEY is not set, don't forget to set it locally in .dev.vars, and use `wrangler secret bulk .dev.vars` to upload it to production"
+        "DEEPSEEK_API_KEY is not set, don't forget to set it locally in .dev.vars, and use `wrangler secret bulk .dev.vars` to upload it to production"
       );
-      return new Response("OPENAI_API_KEY is not set", { status: 500 });
+      return new Response("DEEPSEEK_API_KEY is not set", { status: 500 });
     }
     return (
       // Route the request to our agent or return 404 if not found

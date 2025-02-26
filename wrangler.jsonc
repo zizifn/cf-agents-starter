@@ -13,6 +13,10 @@
 	"assets": {
 		"directory": "public"
 	},
+  "vars": {
+    "DEEPSEEK_API_KEY": "",
+    "OPENAI_API_KEY": ""
+  },
 	"durable_objects": {
 		"bindings": [
 			{
